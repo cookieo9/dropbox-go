@@ -10,26 +10,27 @@ import (
 
 // Constants to build URLs
 const (
-	VERSION = 1
-	SCHEME  = "https://"
-	PREFIX  = "/1"
+	Version = 1
+	Scheme  = "https://"
+	Prefix  = "/1"
 
-	API_HOST = "api.dropbox.com"
-	WWW_HOST = "www.dropbox.com"
-	CNT_HOST = "api-content.dropbox.com"
+	APIHost     = "api.dropbox.com"
+	WWWHost     = "www.dropbox.com"
+	ContentHost = "api-content.dropbox.com"
 
-	API_PREFIX = SCHEME + API_HOST + PREFIX
-	WWW_PREFIX = SCHEME + WWW_HOST + PREFIX
-	CNT_PREFIX = SCHEME + CNT_HOST + PREFIX
+	APIPrefix     = Scheme + APIHost + Prefix
+	WWWPrefix     = Scheme + WWWHost + Prefix
+	ContentPrefix = Scheme + ContentHost + Prefix
 )
 
 // Authorization URLs
 const (
-	REQUEST_URI       = API_PREFIX + "/oauth/request_token"
-	AUTHORIZATION_URI = WWW_PREFIX + "/oauth/authorize"
-	ACCESS_URI        = API_PREFIX + "/oauth/access_token"
+	RequestURI       = APIPrefix + "/oauth/request_token"
+	AuthorizationURI = WWWPrefix + "/oauth/authorize"
+	AccessURI        = APIPrefix + "/oauth/access_token"
 )
 
+// An AuthorizationError error represents an error generated while trying to perform OAuth authentication.
 type AuthorizationError struct {
 	Context string
 	Cause   error
@@ -44,7 +45,7 @@ func (ae *AuthorizationError) Error() string {
 
 // Credentials represents the a set of authentication credentials in the
 // Dropbox OAuth v1 API. They are used to sign and authenticate all communication
-// with the Dropbox servers. 
+// with the Dropbox servers.
 type Credentials struct {
 	Token, Secret string
 }
@@ -64,36 +65,40 @@ func (c *Credentials) oauth() *oauth.Credentials {
 }
 
 var oauthClient = oauth.Client{
-	TemporaryCredentialRequestURI: REQUEST_URI,
-	ResourceOwnerAuthorizationURI: AUTHORIZATION_URI,
-	TokenRequestURI:               ACCESS_URI,
+	TemporaryCredentialRequestURI: RequestURI,
+	ResourceOwnerAuthorizationURI: AuthorizationURI,
+	TokenRequestURI:               AccessURI,
 }
 
+// A Session represents an OAuth connection to dropbox.
 type Session struct {
 	RequestToken, AccessToken *Credentials
 	OauthClient               oauth.Client
-	HttpClient                *http.Client
+	HTTPClient                *http.Client
 	Locale                    string
 }
 
 func (s *Session) client() *http.Client {
-	if s.HttpClient != nil {
-		return s.HttpClient
+	if s.HTTPClient != nil {
+		return s.HTTPClient
 	}
 	return http.DefaultClient
 }
 
-func NewSession(app_key, app_secret string, httpClient *http.Client, accessToken *Credentials) *Session {
+// NewSession creates a new Session object using the given data.
+// Both httpClient and accessToken may be nil. In the case of the former, http.DefaultClient
+// is used, and in the case of the latter, the full authorization cycle must be performed.
+func NewSession(appKey, appSecret string, httpClient *http.Client, accessToken *Credentials) *Session {
 	return &Session{
 		AccessToken: accessToken,
-		HttpClient:  httpClient,
+		HTTPClient:  httpClient,
 		OauthClient: oauth.Client{
-			TemporaryCredentialRequestURI: REQUEST_URI,
-			ResourceOwnerAuthorizationURI: AUTHORIZATION_URI,
-			TokenRequestURI:               ACCESS_URI,
+			TemporaryCredentialRequestURI: RequestURI,
+			ResourceOwnerAuthorizationURI: AuthorizationURI,
+			TokenRequestURI:               AccessURI,
 			Credentials: oauth.Credentials{
-				Token:  app_key,
-				Secret: app_secret,
+				Token:  appKey,
+				Secret: appSecret,
 			},
 		},
 	}
@@ -182,14 +187,13 @@ func (s *Session) GetAccessToken() error {
 	}
 
 	if s.RequestToken == nil {
-		return errors.New("No request token")
+		return errors.New("no request token")
 	}
 
 	if cred, _, err := s.OauthClient.RequestToken(s.client(), s.RequestToken.oauth(), ""); err != nil {
 		return err
-	} else {
-		s.AccessToken = fromOauth(cred)
 	}
+	s.AccessToken = fromOauth(cred)
 	return nil
 }
 
@@ -198,7 +202,7 @@ func (s *Session) GetAccessToken() error {
 // returns an error.
 func (s *Session) signParam(method, url string, params url.Values) error {
 	if !s.Authorized() {
-		return errors.New("Session Not Authorized")
+		return errors.New("session not authorized")
 	}
 
 	s.OauthClient.SignParam(s.AccessToken.oauth(), method, url, params)

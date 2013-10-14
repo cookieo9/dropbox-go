@@ -11,13 +11,14 @@ import (
 	"time"
 )
 
-// Special structure which represents a time value (using an embedded time.Time)
+// Time is a special structure which represents a time value (using an embedded time.Time)
 // and supports conversion from JSON with the appropriate format used by the
 // Dropbox API.
 type Time struct {
 	time.Time
 }
 
+// UnmarshalJSON exists to implement the json.Unmarshaller interface
 func (t *Time) UnmarshalJSON(data []byte) error {
 	var str string
 	if err := json.Unmarshal(data, &str); err != nil {
@@ -26,13 +27,12 @@ func (t *Time) UnmarshalJSON(data []byte) error {
 
 	if t2, err := time.Parse(time.RFC1123Z, str); err != nil {
 		return err
-	} else {
-		t.Time = t2
 	}
-
+	t.Time = t2
 	return nil
 }
 
+// MarshalJSON exists to implement the json.Marshaller interface
 func (t *Time) MarshalJSON() ([]byte, error) {
 	return json.Marshal(t.Format(time.RFC1123Z))
 }
@@ -73,10 +73,13 @@ func (e *Entry) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, &els)
 }
 
+// MarshalJSON exists to implement the json.Marshaller interface properly
 func (e *Entry) MarshalJSON() ([]byte, error) {
 	return json.Marshal([]interface{}{e.Path, e.Meta})
 }
 
+// A Delta represents a list of changes to a dropbox. The cursor field
+// is used to resume processing all changes since this delta.
 type Delta struct {
 	Entries []Entry `json:"entries"`
 	Reset   bool    `json:"reset"`
@@ -100,6 +103,7 @@ type CopyRef struct {
 	Expires Time   `json:"expires"`
 }
 
+// An AccountInfo represents the user's account information in dropbox.
 type AccountInfo struct {
 	ReferralLink string    `json:"referral_link"`
 	DisplayName  string    `json:"display_name"`
@@ -108,12 +112,14 @@ type AccountInfo struct {
 	QuotaInfo    QuotaInfo `json:"quota_info"`
 }
 
+// A QuotaInfo represents the data usage in a dropbox.
 type QuotaInfo struct {
 	Shared int64 `json:"shared"`
 	Quota  int64 `json:"quota"`
 	Normal int64 `json:"normal"`
 }
 
+// An APIError contains an error returned by the API.
 type APIError struct {
 	Code    int
 	Message string `json:"error"`
@@ -136,12 +142,12 @@ func checkResponse(response *http.Response, err error) (*http.Response, error) {
 	case http.StatusUnauthorized:
 		context := response.Request.URL.Path[3:]
 		response.Body.Close()
-		return nil, &AuthorizationError{context, errors.New("Bad or Expired Token")}
+		return nil, &AuthorizationError{context, errors.New("bad or expired token")}
 	}
 	return response, err
 }
 
-func (c *Client) put(urlStr string, params url.Values, body io.Reader, content_length int64) (*http.Response, error) {
+func (c *Client) put(urlStr string, params url.Values, body io.Reader, contentLength int64) (*http.Response, error) {
 	if err := c.signParam("PUT", urlStr, params); err != nil {
 		return nil, err
 	}
@@ -151,8 +157,8 @@ func (c *Client) put(urlStr string, params url.Values, body io.Reader, content_l
 		return nil, err
 	}
 
-	if content_length > 0 {
-		req.ContentLength = content_length
+	if contentLength > 0 {
+		req.ContentLength = contentLength
 	}
 
 	return checkResponse(c.client().Do(req))

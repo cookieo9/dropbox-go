@@ -11,9 +11,10 @@ import (
 // available.
 type AccessRoot string
 
+// Constants to control Client access to dropbox
 const (
-	DropboxRoot   AccessRoot = "dropbox"
-	SandboxRoot   AccessRoot = "sandbox"
+	DropboxRoot   AccessRoot = "dropbox" // Access full dropbox
+	SandboxRoot   AccessRoot = "sandbox" // Access app sandbox
 	AppFolderRoot AccessRoot = "sandbox" // Alias for "sandbox"
 )
 
@@ -25,25 +26,25 @@ type Client struct {
 
 // URLs for all the Dropbox REST-API Calls
 const (
-	API_ACCOUNT_INFO          = API_PREFIX + "/account/info"
-	API_FILES                 = CNT_PREFIX + "/files"
-	API_FILES_PUT             = CNT_PREFIX + "/files_put"
-	API_METADATA              = API_PREFIX + "/metadata"
-	API_DELTA                 = API_PREFIX + "/delta"
-	API_REVISIONS             = API_PREFIX + "/revisions"
-	API_RESTORE               = API_PREFIX + "/restore"
-	API_SEARCH                = API_PREFIX + "/search"
-	API_SHARES                = API_PREFIX + "/shares"
-	API_MEDIA                 = API_PREFIX + "/media"
-	API_COPY_REF              = API_PREFIX + "/copy_ref"
-	API_THUMBNAILS            = CNT_PREFIX + "/thumbnails"
-	API_FILEOPS_COPY          = API_PREFIX + "/fileops/copy"
-	API_FILEOPS_CREATE_FOLDER = API_PREFIX + "/fileops/create_folder"
-	API_FILEOPS_DELETE        = API_PREFIX + "/fileops/delete"
-	API_FILEOPS_MOVE          = API_PREFIX + "/fileops/move"
+	AccountInfoURL         = APIPrefix + "/account/info"
+	FilesURL               = ContentPrefix + "/files"
+	FilesPutURL            = ContentPrefix + "/files_put"
+	MetadataURL            = APIPrefix + "/metadata"
+	DeltaURL               = APIPrefix + "/delta"
+	RevisionsURL           = APIPrefix + "/revisions"
+	RestoreURL             = APIPrefix + "/restore"
+	SearchURL              = APIPrefix + "/search"
+	SharesURL              = APIPrefix + "/shares"
+	MediaURL               = APIPrefix + "/media"
+	CopyRefURL             = APIPrefix + "/copy_ref"
+	ThumbnailsURL          = ContentPrefix + "/thumbnails"
+	FileOpsCopyURL         = APIPrefix + "/fileops/copy"
+	FileOpsCreateFolderURL = APIPrefix + "/fileops/create_folder"
+	FileOpsDeleteURL       = APIPrefix + "/fileops/delete"
+	FileOpsMoveURL         = APIPrefix + "/fileops/move"
 )
 
-// Create a new client using the given authorized session, and working on
+// NewClient creates a new client using the given authorized session, and working on
 // the given Dropbox Root (defined by the App entry). Passing an unauthorized
 // session will cause NewClient to panic.
 func NewClient(session *Session, root AccessRoot) *Client {
@@ -59,12 +60,14 @@ func NewClient(session *Session, root AccessRoot) *Client {
 
 // AccountInfo performs the account/info API call and returns the result.
 func (c *Client) AccountInfo() (account *AccountInfo, err error) {
-	err = c.getJSON(API_ACCOUNT_INFO, c.makeParams(true), &account)
+	err = c.getJSON(AccountInfoURL, c.makeParams(true), &account)
 	return
 }
 
+// GetFile downloads the data for a single file as a io.ReadCloser, as well as fetches
+// its metadata.
 func (c *Client) GetFile(path string, rev string) (io.ReadCloser, *Metadata, error) {
-	uri := API_FILES + c.filePath(path)
+	uri := FilesURL + c.filePath(path)
 	params := c.makeParams(false)
 	if rev != "" {
 		params.Set("rev", rev)
@@ -72,8 +75,10 @@ func (c *Client) GetFile(path string, rev string) (io.ReadCloser, *Metadata, err
 	return c.fileAccess(uri, params)
 }
 
+// Thumbnail downloads a thumbnail image for the given path. If either format or size
+// are not the empty string they will be sent as part of the request.
 func (c *Client) Thumbnail(path, format, size string) (io.ReadCloser, *Metadata, error) {
-	uri := API_THUMBNAILS + c.filePath(path)
+	uri := ThumbnailsURL + c.filePath(path)
 	params := c.makeParams(false)
 	if format != "" {
 		params.Set("format", format)
@@ -84,14 +89,16 @@ func (c *Client) Thumbnail(path, format, size string) (io.ReadCloser, *Metadata,
 	return c.fileAccess(uri, params)
 }
 
-func (c Client) PutFile(path string, overwrite bool, parent_rev string, data io.Reader, size int64) (meta *Metadata, err error) {
-	uri := API_FILES_PUT + c.filePath(path)
+// PutFile uploads size bytes from the given io.Reader as the contents of a file at the
+// given url. If parentRev is not the empty string, it is set as part of the request.
+func (c Client) PutFile(path string, overwrite bool, parentRev string, data io.Reader, size int64) (meta *Metadata, err error) {
+	uri := FilesPutURL + c.filePath(path)
 	params := c.makeParams(true)
 	if overwrite {
 		params.Set("overwrite", "true")
 	}
-	if parent_rev != "" {
-		params.Set("parent_rev", parent_rev)
+	if parentRev != "" {
+		params.Set("parent_rev", parentRev)
 	}
 	err = c.putJSON(uri, params, &meta, data, size)
 	return
@@ -104,10 +111,10 @@ func (c Client) PutFile(path string, overwrite bool, parent_rev string, data io.
 //	list: list contents of directories
 //	deleted: show deleted files in listings
 //	rev: if set, use given revision of file instead of latest
-func (c *Client) Metadata(path string, file_limit int, hash string, list, deleted bool, rev string) (meta *Metadata, unmodified bool, err error) {
+func (c *Client) Metadata(path string, fileLimit int, hash string, list, deleted bool, rev string) (meta *Metadata, unmodified bool, err error) {
 	params := c.makeParams(true)
-	if file_limit > 0 {
-		params.Set("file_limit", strconv.FormatInt(int64(file_limit), 10))
+	if fileLimit > 0 {
+		params.Set("file_limit", strconv.FormatInt(int64(fileLimit), 10))
 	}
 	if hash != "" {
 		params.Set("hash", hash)
@@ -122,7 +129,7 @@ func (c *Client) Metadata(path string, file_limit int, hash string, list, delete
 		params.Set("rev", rev)
 	}
 
-	err = c.getJSON(API_METADATA+c.filePath(path), params, &meta)
+	err = c.getJSON(MetadataURL+c.filePath(path), params, &meta)
 	if apierr, ok := err.(*APIError); ok && apierr.Code == http.StatusNotModified {
 		unmodified = true
 		err = nil
@@ -131,62 +138,78 @@ func (c *Client) Metadata(path string, file_limit int, hash string, list, delete
 	return
 }
 
-func (c *Client) Search(path, query string, file_limit int, deleted bool) (meta []*Metadata, err error) {
+// Search searches the given path for files matching the query string.
+//
+//	fileLimit: if > 0, return at most this many results, instead of the default
+//	deleted: if true, show deleted files
+func (c *Client) Search(path, query string, fileLimit int, deleted bool) (meta []*Metadata, err error) {
 	params := c.makeParams(true)
 	params.Set("query", query)
-	if file_limit > 0 {
-		params.Set("file_limit", strconv.FormatInt(int64(file_limit), 10))
+	if fileLimit > 0 {
+		params.Set("file_limit", strconv.FormatInt(int64(fileLimit), 10))
 	}
 	if deleted {
 		params.Set("include_deleted", "true")
 	}
 
-	err = c.getJSON(API_SEARCH+c.filePath(path), params, &meta)
+	err = c.getJSON(SearchURL+c.filePath(path), params, &meta)
 	return
 }
 
+// Delta returns a list of all changes to the dropbox. If cursor is
+// the empty string, then changes from the creation of the dropbox are
+// given, otherwise, changes since the mentioned cursor are given.
 func (c *Client) Delta(cursor string) (delta *Delta, err error) {
 	params := c.makeParams(true)
 	if cursor != "" {
 		params.Set("cursor", cursor)
 	}
-	err = c.postFormJSON(API_DELTA, params, &delta)
+	err = c.postFormJSON(DeltaURL, params, &delta)
 	return
 }
 
+// Media gets a URL to the given path that is accessible without login.
+// It is expected to not last long.
 func (c *Client) Media(path string) (media *Share, err error) {
 	params := c.makeParams(true)
-	err = c.postFormJSON(API_MEDIA+c.filePath(path), params, &media)
+	err = c.postFormJSON(MediaURL+c.filePath(path), params, &media)
 	return
 }
 
-func (c *Client) Shares(path string, short_url bool) (share *Share, err error) {
+// Shares returns a semi-permanent url to access the given path. If shortURL is set
+// then a URL shortened version is provided.
+func (c *Client) Shares(path string, shortURL bool) (share *Share, err error) {
 	params := c.makeParams(true)
-	if short_url {
+	if shortURL {
 		params.Set("short_url", "true")
 	}
-	err = c.postFormJSON(API_SHARES+c.filePath(path), params, &share)
+	err = c.postFormJSON(SharesURL+c.filePath(path), params, &share)
 	return
 }
 
-func (c *Client) Revisions(path string, rev_limit int) (revs []Metadata, err error) {
+// Revisions returns up to revLimit (or default # if 0) sets of metadata for previous
+// versions of the file/folder at the given path.
+func (c *Client) Revisions(path string, revLimit int) (revs []Metadata, err error) {
 	params := c.makeParams(true)
-	if rev_limit > 0 {
-		params.Set("rev_limit", strconv.FormatInt(int64(rev_limit), 10))
+	if revLimit > 0 {
+		params.Set("rev_limit", strconv.FormatInt(int64(revLimit), 10))
 	}
-	err = c.getJSON(API_REVISIONS+c.filePath(path), params, &revs)
+	err = c.getJSON(RevisionsURL+c.filePath(path), params, &revs)
 	return
 }
 
+// Restore restores a file to the given path with the given revision.
 func (c *Client) Restore(path, rev string) (meta *Metadata, err error) {
 	params := c.makeParams(true)
 	params.Set("rev", rev)
-	err = c.getJSON(API_RESTORE+c.filePath(path), params, &meta)
+	err = c.getJSON(RestoreURL+c.filePath(path), params, &meta)
 	return
 }
 
+// CopyRef get a reference to the file/folder at the path provided that is
+// unique across Dropbox, and can be use to share across users.
 func (c *Client) CopyRef(path string) (ref *CopyRef, err error) {
 	params := c.makeParams(false)
-	err = c.getJSON(API_COPY_REF+c.filePath(path), params, &ref)
+	err = c.getJSON(CopyRefURL+c.filePath(path), params, &ref)
 	return
 }
