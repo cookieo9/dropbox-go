@@ -15,7 +15,12 @@ Build Status
 Install
 -------
 
-    go get github.com/cookieo9/dropbox-go/dropbox
+    go get github.com/cookieo9/dropbox-go
+
+Documentation
+-------------
+
+   http://www.godoc.org/github.com/cookieo9/dropbox-go
 
 License
 -------
