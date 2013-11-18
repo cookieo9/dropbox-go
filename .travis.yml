@@ -3,7 +3,6 @@ language: go
 go:
   - 1.0
   - 1.1
-  - tip
 
 script:
         - go test github.com/cookieo9/dropbox-go/dropbox
