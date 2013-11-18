@@ -6,5 +6,4 @@ go:
   - tip
 
 script:
-        - go test github.com/cookieo9/dropbox
-        - go test -race github.com/cookieo9/dropbox
+        - go test github.com/cookieo9/dropbox-go/dropbox
