@@ -11,6 +11,7 @@ Build Status
 ------------
 
 [![Build Status](https://travis-ci.org/cookieo9/dropbox-go.png?branch=master)](https://travis-ci.org/cookieo9/dropbox-go)
+[![Build status](https://ci.appveyor.com/api/projects/status?id=hq4a9b2oe9dfjrcv)](https://ci.appveyor.com/project/dropbox-go)
 
 Install
 -------
