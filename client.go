@@ -1,7 +1,9 @@
 package dropbox
 
 import (
+	"encoding/json"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"strconv"
 )
@@ -38,6 +40,8 @@ const (
 	MediaURL               = APIPrefix + "/media"
 	CopyRefURL             = APIPrefix + "/copy_ref"
 	ThumbnailsURL          = ContentPrefix + "/thumbnails"
+	ChunkedUploadURL       = ContentPrefix + "/chunked_upload"
+	CommitChunkedUploadURL = ContentPrefix + "/commit_chunked_upload"
 	FileOpsCopyURL         = APIPrefix + "/fileops/copy"
 	FileOpsCreateFolderURL = APIPrefix + "/fileops/create_folder"
 	FileOpsDeleteURL       = APIPrefix + "/fileops/delete"
@@ -211,5 +215,57 @@ func (c *Client) Restore(path, rev string) (meta *Metadata, err error) {
 func (c *Client) CopyRef(path string) (ref *CopyRef, err error) {
 	params := c.makeParams(false)
 	err = c.getJSON(CopyRefURL+c.filePath(path), params, &ref)
+	return
+}
+
+// ChunkedUpload performs file upload in multiple chunks. Set uploadId to empty string for initial chunk.
+// If offset does not match the expected, an APIError with bad request code and a ChunkedUpload with
+// expected state are returned.
+func (c *Client) ChunkedUpload(uploadId string, offset int64, data io.Reader, size int64) (*ChunkedUpload, error) {
+	params := c.makeParams(false)
+	if uploadId != "" {
+		params.Set("upload_id", uploadId)
+		params.Set("offset", strconv.FormatInt(offset, 10))
+	}
+
+	r, err := c.put(ChunkedUploadURL, params, data, size)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Body.Close()
+
+	var state ChunkedUpload
+
+	// When offset does not match, 400 status and expected state are returned.
+	if r.StatusCode == http.StatusBadRequest {
+		apierr := &APIError{
+			Code: r.StatusCode,
+		}
+		if body, err := ioutil.ReadAll(r.Body); err != nil {
+			return nil, err
+		} else if err := json.Unmarshal(body, &state); err != nil {
+			return nil, err
+		} else if err := json.Unmarshal(body, apierr); err != nil {
+			return nil, err
+		}
+		return &state, apierr
+	}
+
+	if err := parseJSON(r, &state); err != nil {
+		return nil, err
+	}
+	return &state, nil
+}
+
+// CommitChunkedUpload commits a chunked upload.
+func (c *Client) CommitChunkedUpload(path string, overwrite bool, parentRev, uploadId string) (meta *Metadata, err error) {
+	uri := CommitChunkedUploadURL + c.filePath(path)
+	params := c.makeParams(true)
+	params.Set("overwrite", strconv.FormatBool(overwrite))
+	if parentRev != "" {
+		params.Set("parent_rev", parentRev)
+	}
+	params.Set("upload_id", uploadId)
+	err = c.postFormJSON(uri, params, &meta)
 	return
 }

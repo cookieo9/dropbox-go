@@ -120,6 +120,13 @@ type QuotaInfo struct {
 	Normal int64 `json:"normal"`
 }
 
+// A ChunkedUpload represents the state of a chunked upload session.
+type ChunkedUpload struct {
+	UploadId string `json:"upload_id"`
+	Offset   int64  `json:"offset"`
+	Expires  Time   `json:"expires"`
+}
+
 // An APIError contains an error returned by the API.
 type APIError struct {
 	Code    int
