@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"path"
@@ -149,7 +150,7 @@ func checkResponse(response *http.Response, err error) (*http.Response, error) {
 	switch response.StatusCode {
 	case http.StatusUnauthorized:
 		context := response.Request.URL.Path[3:]
-		response.Body.Close()
+		drainAndClose(response.Body)
 		return nil, &AuthorizationError{context, errors.New("bad or expired token")}
 	}
 	return response, err
@@ -188,6 +189,23 @@ func (c *Client) get(urlStr string, params url.Values) (*http.Response, error) {
 	return checkResponse(c.client().Get(urlStr + "?" + params.Encode()))
 }
 
+func drain(r io.Reader) error {
+	_, err := io.Copy(ioutil.Discard, r)
+	if err == io.EOF {
+		return nil
+	}
+	return err
+}
+
+func drainAndClose(rc io.ReadCloser) error {
+	err1 := drain(rc)
+	err2 := rc.Close()
+	if err1 != nil {
+		return err1
+	}
+	return err2
+}
+
 func parseJSON(resp *http.Response, target interface{}) error {
 	d := json.NewDecoder(resp.Body)
 
@@ -216,7 +234,7 @@ func (c *Client) putJSON(urlStr string, params url.Values, target interface{}, d
 	if err != nil {
 		return err
 	}
-	defer r.Body.Close()
+	defer drainAndClose(r.Body)
 	return parseJSON(r, target)
 }
 
@@ -225,7 +243,7 @@ func (c *Client) getJSON(urlStr string, params url.Values, target interface{}) e
 	if err != nil {
 		return err
 	}
-	defer r.Body.Close()
+	defer drainAndClose(r.Body)
 	return parseJSON(r, target)
 }
 
@@ -234,7 +252,7 @@ func (c *Client) postFormJSON(urlStr string, params url.Values, target interface
 	if err != nil {
 		return err
 	}
-	defer r.Body.Close()
+	defer drainAndClose(r.Body)
 	return parseJSON(r, target)
 }
 
@@ -248,7 +266,7 @@ func (c *Client) fileAccess(uri string, params url.Values) (io.ReadCloser, *Meta
 	metaStr := response.Header.Get("x-dropbox-metadata")
 	if len(metaStr) > 0 {
 		if err := json.Unmarshal([]byte(metaStr), &meta); err != nil {
-			response.Body.Close()
+			drainAndClose(response.Body)
 			return nil, nil, err
 		}
 	}
