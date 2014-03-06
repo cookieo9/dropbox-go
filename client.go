@@ -232,7 +232,7 @@ func (c *Client) ChunkedUpload(uploadId string, offset int64, data io.Reader, si
 	if err != nil {
 		return nil, err
 	}
-	defer r.Body.Close()
+	defer drainAndClose(r.Body)
 
 	var state ChunkedUpload
 
