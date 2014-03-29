@@ -1,0 +1,10 @@
+clone_folder: c:\gopath\src\github.com\cookieo9\dropbox-go
+
+environment:
+  GOPATH: c:\gopath
+  
+build_script:
+  - go install -v
+  
+test_script:
+  - go test
