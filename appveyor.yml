@@ -4,6 +4,7 @@ environment:
   GOPATH: c:\gopath
   
 build_script:
+  - go get -d -v
   - go install -v
   
 test_script:
